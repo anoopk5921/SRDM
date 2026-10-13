@@ -1,0 +1,18 @@
+---
+description: Live Joinevents transactions and how each status must change
+alwaysApply: true
+---
+
+# Join transactions
+
+A transaction is one `Joinevents` row. Joining ids start at `1000000000`. On 2026-10-11 the user cleared every `Joinevents` row. The table is empty and the next id is `1000000000`. Do not reinsert the former rows.
+
+`JoinChild` for employee `2496` has `KidsNumber` 5. New rows use `Event` Annual Day 2026 and `EventYear` 2026.
+
+Bulk registration writes one Joinevents row per pass. EmployeeId stays blank. Name and EmployeeName are GuestCategory plus the next prefix, PrefixNumber+1, then the following numbers through Total Pass (Guest with prefix 0 and 2 passes becomes Guest1, Guest2). A name that already exists is rejected and PrefixNumber stays unchanged. Relation and AdmissionGroup are that GuestCategory. Joinevents.Category is UnRegistered. Department and Company come from the form. PrefixNumber then increases by Total Pass. Other statuses stay Pending, and approval, print, gate, and meals follow the same path as any other join.
+
+Printed passes use a larger Sreedhareeyam logo, Entry Pass in large type at the top right, and the institution name on one line, a little lower under the logo and sized to fit the header. The event name sits on a green band below the QR code. Six passes are on a portrait A4 page, with the event name on the right of each pass and the QR code centred at the bottom. Name and Guest Category are printed in large type, with extra space between the letters. Registered employees show Guest Cat Employee, employee code, and department. Other registered relations show Guest Cat Family, the attendee name, employee name, department, and employee id. UnRegistered with AdmissionGroup Employee shows employee name and department. Any other admission group shows Guest Category as that group and Name as the pass name.
+
+Status path: register → Approve or Reject → print sets Printed (only Approved) → gate sets Joined → meals sets Served. Report issue is only `Drunk Issue` or `Other Issues`. A Printed row cannot be deleted. Registered saves copy department, employee name, and company from `EmployeeMaster` and must stay within `AllowedStrength`. Unregistered rows have a null employee id. An unregistered employee receives the next free `UnregisteredNumber`, `UR1`, then `UR2`, and so on. If that number was just taken by another registration, the save checks again and uses the next free number. Opening that number shows the same family page as a registered employee: add family members later, and those rows keep the same `UnregisteredNumber`. An unregistered household can have only 6 attendees, including the employee. Registered rows and bulk guest passes leave `UnregisteredNumber` blank.
+
+Masters beside these transactions: 4 companies, 67 departments, 826 employees. `Category` rows: Guest, Guest-P, Guest-S, and Guest-C, each with `PrefixNumber` 0.

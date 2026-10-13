@@ -1,0 +1,4 @@
+http://127.0.0.1:5173/meals
+http://127.0.0.1:5173/entry
+http://127.0.0.1:5173/approval
+http://127.0.0.1:5173/employee
