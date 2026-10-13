@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deletion_log import record_deletion
+from app.routers.auth import require_admin
 from app.models import Company, Employee, JoinChild, JoinEvent
 from app.schemas import EmployeeDeleteResult, EmployeeOut, EmployeeStrengthUpdate, EmployeeUploadResult
 
@@ -59,7 +60,11 @@ def list_employees(q: str | None = None, db: Session = Depends(get_db)):
 
 
 @router.delete("", response_model=EmployeeDeleteResult)
-def delete_all_employees(request: Request, db: Session = Depends(get_db)):
+def delete_all_employees(
+    request: Request,
+    _admin: str = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
     try:
         events = db.execute(delete(JoinEvent))
         children = db.execute(delete(JoinChild))

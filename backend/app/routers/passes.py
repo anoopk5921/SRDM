@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deletion_log import record_deletion
+from app.routers.auth import require_admin
 from app.unregistered_number import assign_missing_unregistered_numbers, hold_unregistered_number
 from app.models import Company, Employee, JoinChild, JoinEvent
 from app.party import company_on_clause, in_department, labels
@@ -385,7 +386,7 @@ def _join_values(event: JoinEvent) -> list:
 
 
 @router.get("/join-events")
-def download_join_events(db: Session = Depends(get_db)):
+def download_join_events(_admin: str = Depends(require_admin), db: Session = Depends(get_db)):
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "Joinevents"
@@ -402,7 +403,11 @@ def download_join_events(db: Session = Depends(get_db)):
 
 
 @router.delete("/join-events", response_model=JoinEventDeleteResult)
-def delete_all_join_events(request: Request, db: Session = Depends(get_db)):
+def delete_all_join_events(
+    request: Request,
+    _admin: str = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
     deleted = db.execute(delete(JoinEvent)).rowcount or 0
     children_deleted = db.execute(delete(JoinChild)).rowcount or 0
     record_deletion(
@@ -417,7 +422,11 @@ def delete_all_join_events(request: Request, db: Session = Depends(get_db)):
 
 
 @router.post("/join-events", response_model=JoinEventUploadResult)
-async def upload_join_events(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_join_events(
+    file: UploadFile = File(...),
+    _admin: str = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
     filename = (file.filename or "").lower()
     if not filename.endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Choose an Excel .xlsx file")

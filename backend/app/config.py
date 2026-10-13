@@ -14,6 +14,7 @@ class Settings:
     db_name: str = os.getenv("DB_NAME", "SRDM")
     app_username: str = os.getenv("APP_USERNAME", "hrdept")
     app_password: str = os.getenv("APP_PASSWORD", "hr2026")
+    admin_passkey: str = os.getenv("ADMIN_PASSKEY", "9447115921")
     session_secret: str = os.getenv("SESSION_SECRET", "srdm-annual-day-2026-session")
 
 

@@ -451,6 +451,47 @@ class RegistrationSummaryReport(BaseModel):
     registrations: list[SummaryPass]
 
 
+class AppUserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    username: str
+    password: str
+
+
+class AppUserCreate(BaseModel):
+    username: str = Field(min_length=1, max_length=50)
+    password: str = Field(min_length=1, max_length=50)
+
+    @field_validator("username", "password")
+    @classmethod
+    def strip_user(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("This field is required")
+        return value
+
+    @field_validator("username")
+    @classmethod
+    def user_name_characters(cls, value: str) -> str:
+        allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+        if not value[0].isalnum() or any(character not in allowed for character in value):
+            raise ValueError("Start with a letter or number. Then use letters, numbers, dots, underscores, or hyphens")
+        return value
+
+
+class AppUserPasswordUpdate(BaseModel):
+    username: str = Field(min_length=1, max_length=50)
+    password: str = Field(min_length=1, max_length=50)
+
+    @field_validator("username", "password")
+    @classmethod
+    def strip_user_password(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("This field is required")
+        return value
+
+
 class GateIssue(GateEntry):
     report_issue: str
 

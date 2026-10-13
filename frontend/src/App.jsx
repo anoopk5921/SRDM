@@ -3,10 +3,12 @@ import {
   createCompany,
   updateCompany,
   createDepartment,
+  createUser,
   approveAllAttendees,
   rejectAllAttendees,
   decideAttendee,
   deleteAllEmployees,
+  deleteUser,
   downloadJoinEvents,
   downloadPassesPdf,
   downloadAllDepartmentPassesPdf,
@@ -29,6 +31,7 @@ import {
   fetchEmployee,
   fetchHealth,
   fetchSession,
+  lockAdmin,
   loginApp,
   logoutApp,
   updateEmployeeStrength,
@@ -44,16 +47,18 @@ import {
   saveBulkRegistration,
   saveJoinEvent,
   fetchUnregisteredHousehold,
+  fetchUsers,
   saveUnregisteredFamily,
   saveUnregisteredJoin,
   updateDepartmentPassword,
+  updateUserPassword,
+  unlockAdmin,
   uploadEmployees,
   uploadJoinEvents,
 } from './api'
 import './App.css'
 
 const EMPTY_FORM = { company_code: '', company_name: '' }
-const ADMIN_PASSKEY = '9447115921'
 const EMPLOYEE_PAGE_SIZE = 100
 const ATTENDEE_PAGE_SIZE = 50
 const SUMMARY_PAGE_SIZE = 50
@@ -385,6 +390,12 @@ export default function App() {
   const [deletionLogs, setDeletionLogs] = useState([])
   const [deletionPage, setDeletionPage] = useState(0)
   const [adminUnlocked, setAdminUnlocked] = useState(false)
+  const [userRows, setUserRows] = useState([])
+  const [userName, setUserName] = useState('')
+  const [userPassword, setUserPassword] = useState('')
+  const [userPasswords, setUserPasswords] = useState({})
+  const [updatingUser, setUpdatingUser] = useState('')
+  const [deletingUser, setDeletingUser] = useState('')
   const [joineePass, setJoineePass] = useState('')
   const [gateResult, setGateResult] = useState(null)
   const [entering, setEntering] = useState(false)
@@ -416,7 +427,9 @@ export default function App() {
     let cancelled = false
     fetchSession()
       .then((session) => {
-        if (!cancelled) setSessionUser(session.username)
+        if (cancelled) return
+        setSessionUser(session.username)
+        setAdminUnlocked(Boolean(session.admin))
       })
       .catch((err) => {
         if (cancelled) return
@@ -732,30 +745,159 @@ export default function App() {
 
   useEffect(() => {
     if (view !== 'admin' || !adminUnlocked) return undefined
+    let cancelled = false
     loadDeletionLogs()
-    return undefined
+    fetchUsers()
+      .then((rows) => {
+        if (cancelled) return
+        setUserRows(rows)
+        setUserPasswords(Object.fromEntries(rows.map((row) => [row.username, row.password])))
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [view, adminUnlocked])
 
-  function showAdmin(event) {
+  function endSignIn() {
+    setSessionUser('')
+    setAdminUnlocked(false)
+    setLoginUsername('')
+    setLoginPassword('')
+    setLoginError('Sign in again. This sign-in is no longer valid.')
+  }
+
+  useEffect(() => {
+    function onSignOut() {
+      endSignIn()
+    }
+    window.addEventListener('srdm-sign-out', onSignOut)
+    return () => window.removeEventListener('srdm-sign-out', onSignOut)
+  }, [])
+
+  useEffect(() => {
+    if (portalPath() || !sessionUser) return undefined
+    let cancelled = false
+    const check = () => {
+      fetchSession()
+        .then((session) => {
+          if (!cancelled) setSessionUser(session.username)
+        })
+        .catch((err) => {
+          if (!cancelled && err.message === 'Sign in required') endSignIn()
+        })
+    }
+    const timer = window.setInterval(check, 15000)
+    window.addEventListener('focus', check)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+      window.removeEventListener('focus', check)
+    }
+  }, [sessionUser])
+
+  async function showAdmin(event) {
     event?.preventDefault()
     window.location.hash = 'admin'
     setView('admin')
     setAdminKey('')
     setAdminUnlocked(false)
     setJoinFile(null)
+    setUserName('')
+    setUserPassword('')
     setError('')
     setNotice('')
+    try {
+      await lockAdmin()
+    } catch (err) {
+      if (err.message === 'Sign in required') endSignIn()
+    }
   }
 
-  function onUnlockAdmin(event) {
+  async function onAddUser(event) {
     event.preventDefault()
-    if (adminKey.trim() === ADMIN_PASSKEY) {
-      setAdminUnlocked(true)
-      setError('')
+    setSaving(true)
+    setError('')
+    setNotice('')
+    try {
+      const saved = await createUser({
+        username: userName.trim(),
+        password: userPassword.trim(),
+      })
+      setUserRows((current) =>
+        [...current, saved].sort((left, right) => left.username.localeCompare(right.username)),
+      )
+      setUserPasswords((current) => ({ ...current, [saved.username]: saved.password }))
+      setUserName('')
+      setUserPassword('')
+      setNotice(`Added ${saved.username}.`)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function onUpdateUserPassword(row) {
+    const password = (userPasswords[row.username] || '').trim()
+    if (!password) {
+      setError('Enter a password.')
       return
     }
-    setAdminUnlocked(false)
-    setError('The passkey is not correct')
+    setUpdatingUser(row.username)
+    setError('')
+    setNotice('')
+    try {
+      const saved = await updateUserPassword({ username: row.username, password })
+      setUserRows((current) => current.map((item) => (item.username === row.username ? saved : item)))
+      setUserPasswords((current) => ({ ...current, [saved.username]: saved.password }))
+      setNotice(`Updated the password for ${saved.username}.`)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setUpdatingUser('')
+    }
+  }
+
+  async function onDeleteUser(row) {
+    if (!window.confirm(`Delete ${row.username}? That user will no longer be able to sign in.`)) return
+    setDeletingUser(row.username)
+    setError('')
+    setNotice('')
+    try {
+      await deleteUser(row.username)
+      setUserRows((current) => current.filter((item) => item.username !== row.username))
+      setUserPasswords((current) => {
+        const next = { ...current }
+        delete next[row.username]
+        return next
+      })
+      setNotice(`Deleted ${row.username}.`)
+      loadDeletionLogs()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setDeletingUser('')
+    }
+  }
+
+  async function onUnlockAdmin(event) {
+    event.preventDefault()
+    setError('')
+    try {
+      const session = await unlockAdmin(adminKey.trim())
+      setAdminUnlocked(Boolean(session.admin))
+      setAdminKey('')
+    } catch (err) {
+      setAdminUnlocked(false)
+      if (err.message === 'Sign in required') {
+        endSignIn()
+        return
+      }
+      setError(err.message)
+    }
   }
 
   function stopScan() {
@@ -876,6 +1018,7 @@ export default function App() {
       return
     }
     setSessionUser('')
+    setAdminUnlocked(false)
     setLoginUsername('')
     setLoginPassword('')
     setLoginError('')
@@ -2351,6 +2494,8 @@ export default function App() {
                     value={member.name}
                     onChange={(event) => updateUnregMember(member.key, 'name', event.target.value)}
                     maxLength={200}
+                    placeholder="Name"
+                    required
                   />
                   <select
                     aria-label="Relation"
@@ -2994,6 +3139,8 @@ export default function App() {
                     value={member.name}
                     onChange={(event) => updateMember(member.key, 'name', event.target.value)}
                     maxLength={200}
+                    placeholder="Name"
+                    required
                   />
                   <select
                     aria-label="Relation"
@@ -3888,6 +4035,98 @@ export default function App() {
               </>
             ) : (
               <>
+                <div className="join-data">
+                  <h3>User master</h3>
+                  <p className="hint-text">
+                    These user names and passwords sign in to the application. The signed-in user cannot be deleted, and at least one user must remain.
+                  </p>
+                  <form className="user-fields" onSubmit={onAddUser}>
+                    <label className="kids-field">
+                      User name
+                      <input
+                        value={userName}
+                        onChange={(event) => setUserName(event.target.value)}
+                        maxLength={50}
+                        required
+                        autoComplete="off"
+                      />
+                    </label>
+                    <label className="kids-field">
+                      Password
+                      <input
+                        value={userPassword}
+                        onChange={(event) => setUserPassword(event.target.value)}
+                        maxLength={50}
+                        required
+                        autoComplete="off"
+                      />
+                    </label>
+                    <button type="submit" className="primary rectangle" disabled={saving}>
+                      {saving ? 'Saving…' : 'Add'}
+                    </button>
+                  </form>
+                  {userRows.length === 0 ? (
+                    <p className="empty">No users yet.</p>
+                  ) : (
+                    <div className="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>User name</th>
+                            <th>Password</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {userRows.map((row) => (
+                            <tr key={row.username}>
+                              <td>{row.username}</td>
+                              <td>
+                                <div className="password-edit">
+                                  <input
+                                    value={userPasswords[row.username] ?? ''}
+                                    maxLength={50}
+                                    aria-label={`Password for ${row.username}`}
+                                    autoComplete="off"
+                                    onChange={(event) =>
+                                      setUserPasswords((current) => ({
+                                        ...current,
+                                        [row.username]: event.target.value,
+                                      }))
+                                    }
+                                  />
+                                  <button
+                                    type="button"
+                                    className="primary rectangle"
+                                    disabled={updatingUser === row.username}
+                                    onClick={() => onUpdateUserPassword(row)}
+                                  >
+                                    {updatingUser === row.username ? 'Saving…' : 'Update'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="member-remove"
+                                    disabled={
+                                      deletingUser === row.username ||
+                                      row.username.toLowerCase() === sessionUser.toLowerCase()
+                                    }
+                                    title={
+                                      row.username.toLowerCase() === sessionUser.toLowerCase()
+                                        ? 'The signed-in user cannot be deleted'
+                                        : `Delete ${row.username}`
+                                    }
+                                    onClick={() => onDeleteUser(row)}
+                                  >
+                                    {deletingUser === row.username ? 'Deleting…' : 'Delete'}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
                 <div className="join-data">
                   <h3>JoinEvents</h3>
                   <p className="hint-text">

@@ -94,12 +94,17 @@
 .nav {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   flex: 1;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #d9f99d transparent;
+  scrollbar-width: none;
+}
+
+.nav::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .nav-link {
@@ -108,7 +113,9 @@
   border: 1px solid transparent;
   text-decoration: none;
   border-radius: 999px;
-  padding: 11px 14px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.01em;
@@ -184,7 +191,8 @@
   font-size: 26px;
 }
 
-#employee-page {
+#employee-page,
+#unregistered-family {
   width: 60%;
   max-width: 100%;
   margin-right: auto;
@@ -985,6 +993,20 @@ button:disabled {
   margin: 0;
 }
 
+.user-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 12px;
+  align-items: end;
+  max-width: 720px;
+  margin-bottom: 16px;
+}
+
+.user-fields .kids-field {
+  max-width: none;
+  margin: 0;
+}
+
 .password-edit {
   display: flex;
   gap: 8px;
@@ -1525,6 +1547,7 @@ button:disabled {
   .unreg-fields,
   .bulk-fields,
   .department-fields,
+  .user-fields,
   .attendee-login,
   .attendee-login.pass-filters {
     grid-template-columns: 1fr;
@@ -1767,7 +1790,8 @@ td:first-child {
     font-size: 15px;
   }
 
-  #employee-page {
+  #employee-page,
+  #unregistered-family {
     width: 100%;
   }
 

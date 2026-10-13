@@ -23,6 +23,9 @@ async function request(path, options = {}) {
   const text = await response.text()
   const data = text ? JSON.parse(text) : null
   if (!response.ok) {
+    if (!options.quietAuth && response.status === 401 && data?.detail === 'Sign in required') {
+      window.dispatchEvent(new CustomEvent('srdm-sign-out'))
+    }
     throw new Error(errorMessage(data, 'Request failed'))
   }
   return data
@@ -40,11 +43,38 @@ export function loginApp(username, password) {
 }
 
 export function fetchSession() {
-  return request('/api/auth/session')
+  return request('/api/auth/session', { quietAuth: true })
+}
+
+export function unlockAdmin(passkey) {
+  return request('/api/auth/admin', {
+    method: 'POST',
+    body: JSON.stringify({ passkey }),
+  })
+}
+
+export function lockAdmin() {
+  return request('/api/auth/admin/lock', { method: 'POST', body: '{}' })
 }
 
 export function logoutApp() {
   return request('/api/auth/logout', { method: 'POST', body: '{}' })
+}
+
+export function fetchUsers() {
+  return request('/api/users')
+}
+
+export function createUser(payload) {
+  return request('/api/users', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export function updateUserPassword(payload) {
+  return request('/api/users/password', { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export function deleteUser(username) {
+  return request(`/api/users/${encodeURIComponent(username)}`, { method: 'DELETE' })
 }
 
 export function fetchCompanies() {
@@ -282,7 +312,7 @@ export function downloadAllDepartmentPassesPdf(payload) {
 export async function downloadJoinEvents() {
   let response
   try {
-    response = await fetch('/api/passes/join-events')
+    response = await fetch('/api/passes/join-events', { credentials: 'include' })
   } catch {
     throw new Error('Cannot reach the API. Start it with uvicorn on port 8000.')
   }
@@ -300,7 +330,7 @@ export async function uploadJoinEvents(file) {
   body.append('file', file)
   let response
   try {
-    response = await fetch('/api/passes/join-events', { method: 'POST', body })
+    response = await fetch('/api/passes/join-events', { method: 'POST', body, credentials: 'include' })
   } catch {
     throw new Error('Cannot reach the API. Start it with uvicorn on port 8000.')
   }

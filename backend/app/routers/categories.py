@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Category, Company, Department, JoinEvent
+from app.routers.auth import require_admin
 from app.schemas import BulkRegistrationCreate, CategoryOut, JoinEventOut
 
 router = APIRouter(prefix="/api/categories", tags=["categories"])
@@ -15,7 +16,7 @@ def list_categories(db: Session = Depends(get_db)):
 
 
 @router.post("/reset-prefix", response_model=list[CategoryOut])
-def reset_prefix_numbers(db: Session = Depends(get_db)):
+def reset_prefix_numbers(_admin: str = Depends(require_admin), db: Session = Depends(get_db)):
     rows = db.scalars(select(Category).order_by(Category.id)).all()
     for row in rows:
         row.prefix_number = 0

@@ -155,3 +155,11 @@ class Department(Base):
         primary_key=True,
     )
     password: Mapped[str] = mapped_column("Password", String(50), nullable=False)
+
+
+class AppUser(Base):
+    __tablename__ = "UserMaster"
+
+    username: Mapped[str] = mapped_column("Username", String(50), primary_key=True)
+    password: Mapped[str] = mapped_column("Password", String(50), nullable=False)
+    auth_stamp: Mapped[int] = mapped_column("AuthStamp", Integer, nullable=False, default=1, server_default="1")

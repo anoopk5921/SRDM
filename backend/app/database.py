@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 
 from app.config import settings
-from app.models import Base, Category, Company, Department
+from app.models import AppUser, Base, Category, Company, Department
 
 engine = None
 SessionLocal = None
@@ -68,15 +68,27 @@ def init_database() -> None:
         engine = create_engine(_database_url(), pool_pre_ping=True)
         SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
         Base.metadata.create_all(bind=engine)
+        _prepare_user_master()
         _prepare_join_events()
         _seed_companies()
         _seed_departments()
         _seed_categories()
+        _seed_users()
         connection_error = None
     except Exception as exc:
         engine = None
         SessionLocal = None
         connection_error = _friendly_error(exc)
+
+
+def _prepare_user_master() -> None:
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "ALTER TABLE `UserMaster` "
+                "ADD COLUMN IF NOT EXISTS `AuthStamp` INT NOT NULL DEFAULT 1"
+            )
+        )
 
 
 def _prepare_join_events() -> None:
@@ -350,6 +362,14 @@ def _seed_departments() -> None:
                 session.add(
                     Department(department=department, company_code=company_code, password=password)
                 )
+        session.commit()
+
+
+def _seed_users() -> None:
+    with SessionLocal() as session:
+        if session.scalar(select(AppUser.username).limit(1)) is not None:
+            return
+        session.add(AppUser(username=settings.app_username, password=settings.app_password))
         session.commit()
 
 
