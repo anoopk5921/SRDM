@@ -62,6 +62,9 @@ const EMPTY_FORM = { company_code: '', company_name: '' }
 const EMPLOYEE_PAGE_SIZE = 100
 const ATTENDEE_PAGE_SIZE = 50
 const SUMMARY_PAGE_SIZE = 50
+const REPRINT_PAGE_SIZE = 50
+const PASS_PAGE_SIZE = 50
+const REPORT_PAGE_SIZE = 50
 const RELATIONS = ['Employee', 'Father', 'Mother', 'Wife', 'Husband', 'Daughter', 'Son', 'Brother', 'Sister']
 const UNREGISTERED_ATTENDEE_LIMIT = 6
 const UNREGISTERED_COMPANY = 'SAEH'
@@ -370,6 +373,7 @@ export default function App() {
   const [passDepartments, setPassDepartments] = useState([])
   const [passes, setPasses] = useState([])
   const [passesLoaded, setPassesLoaded] = useState(false)
+  const [passPage, setPassPage] = useState(0)
   const [selectedPassIds, setSelectedPassIds] = useState([])
   const [viewingPasses, setViewingPasses] = useState(false)
   const [printingPasses, setPrintingPasses] = useState(false)
@@ -378,6 +382,8 @@ export default function App() {
   const [reprintDepartments, setReprintDepartments] = useState([])
   const [reprints, setReprints] = useState([])
   const [reprintsLoaded, setReprintsLoaded] = useState(false)
+  const [reprintQuery, setReprintQuery] = useState('')
+  const [reprintPage, setReprintPage] = useState(0)
   const [selectedReprintIds, setSelectedReprintIds] = useState([])
   const [viewingReprints, setViewingReprints] = useState(false)
   const [reprintingPasses, setReprintingPasses] = useState(false)
@@ -402,6 +408,7 @@ export default function App() {
   const [scanning, setScanning] = useState(false)
   const [cameraUrl, setCameraUrl] = useState('')
   const [report, setReport] = useState(null)
+  const [reportPage, setReportPage] = useState(0)
   const [summary, setSummary] = useState(null)
   const [summaryPage, setSummaryPage] = useState(0)
   const [downloadingSummary, setDownloadingSummary] = useState(false)
@@ -583,7 +590,10 @@ export default function App() {
     let cancelled = false
     fetchJoinEventReport()
       .then((data) => {
-        if (!cancelled) setReport(data)
+        if (!cancelled) {
+          setReport(data)
+          setReportPage(0)
+        }
       })
       .catch((err) => {
         if (!cancelled) setError(err.message)
@@ -938,6 +948,7 @@ export default function App() {
     event?.preventDefault()
     window.location.hash = 'final-report'
     setView('report')
+    setReportPage(0)
     setError('')
     setNotice('')
   }
@@ -1129,6 +1140,7 @@ export default function App() {
     setViewingPasses(true)
     setError('')
     setNotice('')
+    setPassPage(0)
     try {
       const rows = scope.allDepartments
         ? await fetchAllDepartmentPasses(scope.companyCode)
@@ -1156,6 +1168,7 @@ export default function App() {
     setPassDepartments([])
     setPasses([])
     setPassesLoaded(false)
+    setPassPage(0)
     setSelectedPassIds([])
     if (!companyCode) return
     try {
@@ -1244,6 +1257,7 @@ export default function App() {
       const printed = new Set(selectedPassIds)
       const remaining = passes.filter((row) => !printed.has(row.unique_event_id))
       setPasses(remaining)
+      setPassPage(0)
       setSelectedPassIds([])
       const departments = await fetchPendingPrintDepartments(passCompany === '*' ? '' : passCompany)
       setPassDepartments(departments)
@@ -1269,6 +1283,8 @@ export default function App() {
     setReprintDepartments([])
     setReprints([])
     setReprintsLoaded(false)
+    setReprintQuery('')
+    setReprintPage(0)
     setSelectedReprintIds([])
     if (!companyCode) return
     try {
@@ -1284,6 +1300,8 @@ export default function App() {
     setError('')
     setNotice('')
     setSelectedReprintIds([])
+    setReprintQuery('')
+    setReprintPage(0)
     try {
       const rows = await fetchPrintedPasses(reprintCompany, reprintDepartment)
       setReprints(rows.filter((row) => row.print_status === 'Printed'))
@@ -1302,9 +1320,12 @@ export default function App() {
   }
 
   function toggleAllReprints() {
-    setSelectedReprintIds((current) =>
-      current.length === reprints.length ? [] : reprints.map((row) => row.unique_event_id),
-    )
+    const ids = visibleReprints.map((row) => row.unique_event_id)
+    setSelectedReprintIds((current) => {
+      const allSelected = ids.length > 0 && ids.every((id) => current.includes(id))
+      if (allSelected) return current.filter((id) => !ids.includes(id))
+      return [...new Set([...current, ...ids])]
+    })
   }
 
   async function onReprintPasses() {
@@ -1485,6 +1506,35 @@ export default function App() {
   )
   const summaryRangeStart = summaryRegistrations.length === 0 ? 0 : currentSummaryPage * SUMMARY_PAGE_SIZE + 1
   const summaryRangeEnd = currentSummaryPage * SUMMARY_PAGE_SIZE + summaryPageRows.length
+  const visibleReprints = useMemo(() => {
+    const term = reprintQuery.trim().toLowerCase()
+    if (!term) return reprints
+    return reprints.filter((row) =>
+      [row.name, row.employee_name, row.employee_id].join(' ').toLowerCase().includes(term),
+    )
+  }, [reprints, reprintQuery])
+  const reprintPageCount = Math.max(1, Math.ceil(visibleReprints.length / REPRINT_PAGE_SIZE))
+  const currentReprintPage = Math.min(reprintPage, reprintPageCount - 1)
+  const reprintPageStart = currentReprintPage * REPRINT_PAGE_SIZE
+  const pagedReprints = visibleReprints.slice(reprintPageStart, reprintPageStart + REPRINT_PAGE_SIZE)
+  const reprintRangeStart = visibleReprints.length === 0 ? 0 : reprintPageStart + 1
+  const reprintRangeEnd = reprintPageStart + pagedReprints.length
+  const allVisibleReprintsSelected =
+    visibleReprints.length > 0 &&
+    visibleReprints.every((row) => selectedReprintIds.includes(row.unique_event_id))
+  const passPageCount = Math.max(1, Math.ceil(passes.length / PASS_PAGE_SIZE))
+  const currentPassPage = Math.min(passPage, passPageCount - 1)
+  const passPageStart = currentPassPage * PASS_PAGE_SIZE
+  const pagedPasses = passes.slice(passPageStart, passPageStart + PASS_PAGE_SIZE)
+  const passRangeStart = passes.length === 0 ? 0 : passPageStart + 1
+  const passRangeEnd = passPageStart + pagedPasses.length
+  const reportRows = report?.rows ?? []
+  const reportPageCount = Math.max(1, Math.ceil(reportRows.length / REPORT_PAGE_SIZE))
+  const currentReportPage = Math.min(reportPage, reportPageCount - 1)
+  const reportPageStart = currentReportPage * REPORT_PAGE_SIZE
+  const pagedReportRows = reportRows.slice(reportPageStart, reportPageStart + REPORT_PAGE_SIZE)
+  const reportRangeStart = reportRows.length === 0 ? 0 : reportPageStart + 1
+  const reportRangeEnd = reportPageStart + pagedReportRows.length
 
   function updateField(event) {
     const { name, value } = event.target
@@ -3386,6 +3436,7 @@ export default function App() {
                     setPassDepartment(value)
                     setPasses([])
                     setPassesLoaded(false)
+                    setPassPage(0)
                     setSelectedPassIds([])
                     if (value) loadPrintPasses(passCompany, value)
                   }}
@@ -3437,6 +3488,25 @@ export default function App() {
                     Select all
                   </label>
                   <span className="count">{selectedPassIds.length} selected</span>
+                  <div className="pager">
+                    <button
+                      type="button"
+                      onClick={() => setPassPage((page) => Math.max(0, page - 1))}
+                      disabled={currentPassPage === 0}
+                    >
+                      Previous
+                    </button>
+                    <p>
+                      {passRangeStart}–{passRangeEnd} of {passes.length}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setPassPage((page) => Math.min(passPageCount - 1, page + 1))}
+                      disabled={currentPassPage >= passPageCount - 1}
+                    >
+                      Next
+                    </button>
+                  </div>
                   <button
                     type="button"
                     className="primary rectangle"
@@ -3463,7 +3533,7 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {passes.map((row) => (
+                      {pagedPasses.map((row) => (
                         <tr key={row.unique_event_id}>
                           <td>
                             <input
@@ -3519,6 +3589,8 @@ export default function App() {
                     setReprintDepartment(event.target.value)
                     setReprints([])
                     setReprintsLoaded(false)
+                    setReprintQuery('')
+                    setReprintPage(0)
                     setSelectedReprintIds([])
                   }}
                   required
@@ -3549,18 +3621,50 @@ export default function App() {
             {reprintsLoaded && reprints.length === 0 && (
               <p className="empty">No printed passes for this department.</p>
             )}
-            {reprints.length > 0 && (
+            {reprintsLoaded && reprints.length > 0 && (
               <>
                 <div className="pass-toolbar">
                   <label className="select-all">
                     <input
                       type="checkbox"
-                      checked={selectedReprintIds.length === reprints.length}
+                      checked={allVisibleReprintsSelected}
                       onChange={toggleAllReprints}
                     />
                     Select all
                   </label>
+                  <label className="search">
+                    <span className="visually-hidden">Search name or employee id</span>
+                    <input
+                      value={reprintQuery}
+                      onChange={(event) => {
+                        setReprintQuery(event.target.value)
+                        setReprintPage(0)
+                      }}
+                      placeholder="Search name or employee id"
+                    />
+                  </label>
                   <span className="count">{selectedReprintIds.length} selected</span>
+                  {visibleReprints.length > 0 && (
+                    <div className="pager">
+                      <button
+                        type="button"
+                        onClick={() => setReprintPage((page) => Math.max(0, page - 1))}
+                        disabled={currentReprintPage === 0}
+                      >
+                        Previous
+                      </button>
+                      <p>
+                        {reprintRangeStart}–{reprintRangeEnd} of {visibleReprints.length}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setReprintPage((page) => Math.min(reprintPageCount - 1, page + 1))}
+                        disabled={currentReprintPage >= reprintPageCount - 1}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
                   <button
                     type="button"
                     className="primary rectangle"
@@ -3570,6 +3674,9 @@ export default function App() {
                     {reprintingPasses ? 'Preparing…' : 'Reprint'}
                   </button>
                 </div>
+                {visibleReprints.length === 0 ? (
+                  <p className="empty">No printed passes match this search.</p>
+                ) : (
                 <div className="table-wrap">
                   <table>
                     <thead>
@@ -3585,7 +3692,7 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {reprints.map((row) => (
+                      {pagedReprints.map((row) => (
                         <tr key={row.unique_event_id}>
                           <td>
                             <input
@@ -3611,6 +3718,7 @@ export default function App() {
                     </tbody>
                   </table>
                 </div>
+                )}
               </>
             )}
           </section>
@@ -3945,27 +4053,49 @@ export default function App() {
                 {report.rows.length === 0 ? (
                   <p className="empty">No join event entries yet.</p>
                 ) : (
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Event id</th>
-                          <th>Employee code</th>
-                          <th>Unregistered number</th>
-                          <th>Staff</th>
-                          <th>Attendee</th>
-                          <th>Relation</th>
-                          <th>Company</th>
-                          <th>Department</th>
-                          <th>Approve</th>
-                          <th>Print</th>
-                          <th>Entry</th>
-                          <th>Meals</th>
-                          <th>Issue</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {report.rows.map((row) => (
+                  <>
+                    <div className="pass-toolbar">
+                      <div className="pager">
+                        <button
+                          type="button"
+                          onClick={() => setReportPage((page) => Math.max(0, page - 1))}
+                          disabled={currentReportPage === 0}
+                        >
+                          Previous
+                        </button>
+                        <p>
+                          {reportRangeStart}–{reportRangeEnd} of {report.rows.length}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setReportPage((page) => Math.min(reportPageCount - 1, page + 1))}
+                          disabled={currentReportPage >= reportPageCount - 1}
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                    <div className="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Event id</th>
+                            <th>Employee code</th>
+                            <th>Unregistered number</th>
+                            <th>Staff</th>
+                            <th>Attendee</th>
+                            <th>Relation</th>
+                            <th>Company</th>
+                            <th>Department</th>
+                            <th>Approve</th>
+                            <th>Print</th>
+                            <th>Entry</th>
+                            <th>Meals</th>
+                            <th>Issue</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pagedReportRows.map((row) => (
                           <tr key={row.unique_event_id}>
                             <td>{row.unique_event_id}</td>
                             <td>{row.employee_id || '—'}</td>
@@ -4001,6 +4131,7 @@ export default function App() {
                       </tbody>
                     </table>
                   </div>
+                  </>
                 )}
               </>
             )}

@@ -1072,6 +1072,32 @@ button:disabled {
   grid-template-columns: 1fr 1.4fr auto;
 }
 
+#final-report .pass-toolbar {
+  justify-content: flex-end;
+}
+
+#reprint-pass .pass-toolbar {
+  flex-wrap: wrap;
+}
+
+#reprint-pass .select-all {
+  flex: 0 0 180px;
+  min-width: 180px;
+  white-space: nowrap;
+}
+
+#reprint-pass .select-all input {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  padding: 0;
+}
+
+#reprint-pass .search {
+  flex: 0 1 320px;
+  margin-right: auto;
+}
+
 .attendee-login label {
   display: flex;
   flex-direction: column;
@@ -1359,7 +1385,7 @@ button:disabled {
 }
 
 #print-pass .pass-toolbar {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 
 #print-pass .select-all {
